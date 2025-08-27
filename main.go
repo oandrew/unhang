@@ -132,6 +132,7 @@ func main() {
 
 	go func() {
 		var o obs
+		kills := 0
 		buf := make([]byte, 4096)
 		for {
 			n, err := os.Stdin.Read(buf)
@@ -144,18 +145,23 @@ func main() {
 			data := buf[:n]
 			if bytes.IndexByte(data, 0x1d) != -1 {
 				if o.observe() {
-					if *exitCmdFlag != "" {
-						exitCmd := exec.Command("bash", "-c", *exitCmdFlag)
-						exitCmd.Env = exitCmd.Environ()
-						exitCmd.Env = append(exitCmd.Env,
-							fmt.Sprintf("TARGET_PID=%d", cmd.Process.Pid),
-						)
-						go func() {
-							exitCmd.Run()
-						}()
+					if kills == 0 {
+						if *exitCmdFlag != "" {
+							exitCmd := exec.Command("bash", "-c", *exitCmdFlag)
+							exitCmd.Env = exitCmd.Environ()
+							exitCmd.Env = append(exitCmd.Env,
+								fmt.Sprintf("TARGET_PID=%d", cmd.Process.Pid),
+							)
+							go func() {
+								exitCmd.Run()
+							}()
+						} else {
+							cmd.Process.Signal(syscall.SIGTERM)
+						}
 					} else {
-						cmd.Process.Signal(syscall.SIGTERM)
+						cmd.Process.Signal(syscall.SIGKILL)
 					}
+					kills++
 				}
 			}
 
