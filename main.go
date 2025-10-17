@@ -18,6 +18,7 @@ import (
 )
 
 var exitCmdFlag = flag.String("c", "", "command to kill process, $TARGET_PID is the process to kill")
+var killTimeoutFlag = flag.Int("k", -1, "kill timeout seconds")
 
 const (
 	StateNone = 0
@@ -153,11 +154,20 @@ func main() {
 								fmt.Sprintf("TARGET_PID=%d", cmd.Process.Pid),
 							)
 							go func() {
-								exitCmd.Run()
+								if out, err := exitCmd.CombinedOutput(); err != nil {
+									log.Printf("Failed to run stop command: %v\n%s", err, string(out))
+								}
 							}()
 						} else {
 							cmd.Process.Signal(syscall.SIGTERM)
 						}
+						go func() {
+							if *killTimeoutFlag >= 0 {
+								time.Sleep(time.Duration(*killTimeoutFlag) * time.Second)
+								cmd.Process.Signal(syscall.SIGKILL)
+
+							}
+						}()
 					} else {
 						cmd.Process.Signal(syscall.SIGKILL)
 					}
