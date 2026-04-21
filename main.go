@@ -17,8 +17,9 @@ import (
 	"golang.org/x/term"
 )
 
-var exitCmdFlag = flag.String("c", "", "command to kill process, $TARGET_PID is the process to kill")
-var killTimeoutFlag = flag.Int("k", -1, "kill timeout seconds")
+var exitCmdFlag = flag.String("c", "", "custom shell command to execute to kill the process. $TARGET_PID will be set to the child process ID")
+var killTimeoutFlag = flag.Int("k", -1, "seconds to wait after sending SIGTERM (or running custom kill command) before sending a forceful SIGKILL")
+var verboseFlag = flag.Bool("v", false, "verbose mode")
 
 const (
 	StateNone = 0
@@ -66,6 +67,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "No cmd provided")
 		os.Exit(1)
 	}
+	fmt.Fprintln(os.Stderr, `Press ^] three times quickly to kill`)
 
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
@@ -148,6 +150,9 @@ func main() {
 				if o.observe() {
 					if kills == 0 {
 						if *exitCmdFlag != "" {
+							if *verboseFlag {
+								log.Printf(`Killing %d with custom command: "%s"`, cmd.Process.Pid, *exitCmdFlag)
+							}
 							exitCmd := exec.Command("bash", "-c", *exitCmdFlag)
 							exitCmd.Env = exitCmd.Environ()
 							exitCmd.Env = append(exitCmd.Env,
@@ -159,16 +164,25 @@ func main() {
 								}
 							}()
 						} else {
+							if *verboseFlag {
+								log.Printf(`Killing %d with SIGTERM`, cmd.Process.Pid)
+							}
 							cmd.Process.Signal(syscall.SIGTERM)
 						}
 						go func() {
 							if *killTimeoutFlag >= 0 {
 								time.Sleep(time.Duration(*killTimeoutFlag) * time.Second)
+								if *verboseFlag {
+									log.Printf(`Killing %d with SIGKILL after timeout`, cmd.Process.Pid)
+								}
 								cmd.Process.Signal(syscall.SIGKILL)
 
 							}
 						}()
 					} else {
+						if *verboseFlag {
+							log.Printf("Killing %v with SIGKILL", cmd.Process.Pid)
+						}
 						cmd.Process.Signal(syscall.SIGKILL)
 					}
 					kills++

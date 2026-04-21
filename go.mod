@@ -1,4 +1,4 @@
-module cliexit
+module unhang
 
 go 1.25.0
 
